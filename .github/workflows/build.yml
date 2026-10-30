@@ -1,0 +1,48 @@
+name: Build entry probe
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify official SDK
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --max-time 300 -o /tmp/skroot.tar.gz https://codeload.github.com/abcz316/SKRoot-linuxKernelRoot/tar.gz/refs/heads/master
+          echo 'eaa6fa1a2cb666dc942d9e0dc52a57be5e1251b14dcbcdfd3991268d505e738f  /tmp/skroot.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/skroot.tar.gz -C /tmp 'SKRoot-linuxKernelRoot-master/Pro(众测开放中)/src/testModule/kernel_module_kit'
+          cp -a '/tmp/SKRoot-linuxKernelRoot-master/Pro(众测开放中)/src/testModule/kernel_module_kit' sdk
+          echo 'f4f1e254c608ca3eb61bdf6cd0b280021b61219c2650ae6c731bd458aebe28a2  sdk/lib/libkernel_module_kit_static.a' | sha256sum -c -
+      - name: Install Android NDK
+        run: sdkmanager 'ndk;28.2.13676358'
+      - name: Build
+        run: |
+          "$ANDROID_HOME/ndk/28.2.13676358/ndk-build" NDK_PROJECT_PATH="$PWD/src" APP_BUILD_SCRIPT="$PWD/src/jni/Android.mk" NDK_APPLICATION_MK="$PWD/src/jni/Application.mk" -j2
+      - name: Inspect and package
+        shell: bash
+        run: |
+          mkdir -p dist
+          LIB=src/libs/arm64-v8a/libskzygisk_probe.so
+          readelf -h "$LIB" | tee dist/elf-header.txt
+          readelf --dyn-syms --wide "$LIB" | tee dist/symbols.txt
+          readelf -d "$LIB" | tee dist/dynamic.txt
+          readelf -lW "$LIB" | tee dist/segments.txt
+          grep -Eq 'Class:.*ELF64' dist/elf-header.txt
+          grep -Eq 'Machine:.*AArch64' dist/elf-header.txt
+          awk '$7 != "UND" && $8 == "__skroot_module_main_18fdf393885363712349ef3de5411bd5" {found=1} END {exit !found}' dist/symbols.txt
+          cp "$LIB" dist/
+          cp README.md dist/
+          cd dist
+          zip SKZygisk_EntryProbe_UNTESTED.zip libskzygisk_probe.so
+          sha256sum libskzygisk_probe.so SKZygisk_EntryProbe_UNTESTED.zip > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: entry-probe-UNTESTED
+          path: dist/
+          retention-days: 1
