@@ -20,7 +20,11 @@ jobs:
           cp -a '/tmp/SKRoot-linuxKernelRoot-master/Pro(众测开放中)/src/testModule/kernel_module_kit' sdk
           echo 'f4f1e254c608ca3eb61bdf6cd0b280021b61219c2650ae6c731bd458aebe28a2  sdk/lib/libkernel_module_kit_static.a' | sha256sum -c -
       - name: Install Android NDK
-        run: sdkmanager 'ndk;28.2.13676358'
+        shell: bash
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" 'ndk;28.2.13676358'
       - name: Build
         run: |
           "$ANDROID_HOME/ndk/28.2.13676358/ndk-build" NDK_PROJECT_PATH="$PWD/src" APP_BUILD_SCRIPT="$PWD/src/jni/Android.mk" NDK_APPLICATION_MK="$PWD/src/jni/Application.mk" -j2
